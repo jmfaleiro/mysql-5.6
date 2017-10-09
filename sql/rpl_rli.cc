@@ -298,7 +298,7 @@ void Relay_log_info::reset_notified_relay_log_change()
 
    Worker notices the new checkpoint value at the group commit to reset
    the current bitmap and starts using the clean bitmap indexed from zero
-   of being reset checkpoint_seqno. 
+   of being reset checkpoint_seqno.
 
     New seconds_behind_master timestamp is installed.
 
@@ -326,7 +326,7 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
       Reseting the notification information in order to force workers to
       assign jobs with the new updated information.
       Notice that the bitmap_shifted is accumulated to indicate how many
-      consecutive jobs were successfully processed. 
+      consecutive jobs were successfully processed.
 
       The worker when assigning a new job will set the value back to
       zero.
@@ -343,7 +343,7 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
 
     DBUG_PRINT("mts", ("reset_notified_checkpoint shift --> %lu, "
                "worker->bitmap_shifted --> %lu, worker --> %u.",
-               shift, w->bitmap_shifted, i));  
+               shift, w->bitmap_shifted, i));
   }
   /*
     There should not be a call where (shift == 0 && checkpoint_seqno != 0).
@@ -354,7 +354,7 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
   DBUG_ASSERT(!(shift == 0 && checkpoint_seqno != 0));
   checkpoint_seqno= checkpoint_seqno - shift;
   DBUG_PRINT("mts", ("reset_notified_checkpoint shift --> %lu, "
-             "checkpoint_seqno --> %u.", shift, checkpoint_seqno));  
+             "checkpoint_seqno --> %u.", shift, checkpoint_seqno));
 
   if (new_ts)
   {
@@ -374,7 +374,7 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
 }
 
 /**
-   Reset recovery info from Worker info table and 
+   Reset recovery info from Worker info table and
    mark MTS recovery is completed.
 
    @return false on success true when @c reset_notified_checkpoint failed.
@@ -1018,7 +1018,7 @@ int Relay_log_info::wait_for_pos(THD* thd, String* log_name,
 #ifndef DBUG_OFF
       /*
         Doing this to generate a stack trace and make debugging
-        easier. 
+        easier.
       */
       if (DBUG_EVALUATE_IF("debug_crash_slave_time_out", 1, 0))
         DBUG_ASSERT(0);
@@ -1093,7 +1093,7 @@ int Relay_log_info::wait_for_gtid_set(THD* thd, String* gtid,
   Gtid_set wait_gtid_set(global_sid_map);
   global_sid_lock->rdlock();
   if (wait_gtid_set.add_gtid_text(gtid->c_ptr_safe()) != RETURN_STATUS_OK)
-  { 
+  {
     global_sid_lock->unlock();
     goto err;
   }
@@ -1164,7 +1164,7 @@ int Relay_log_info::wait_for_gtid_set(THD* thd, String* gtid,
 #ifndef DBUG_OFF
       /*
         Doing this to generate a stack trace and make debugging
-        easier. 
+        easier.
       */
       if (DBUG_EVALUATE_IF("debug_crash_slave_time_out", 1, 0))
         DBUG_ASSERT(0);
@@ -1339,7 +1339,7 @@ int Relay_log_info::purge_relay_logs(THD *thd, bool just_reset,
     It could be that slave's info initialization partly succeeded: for example
     if relay-log.info existed but *relay-bin*.* have been manually removed,
     init_info reads the old relay-log.info and fills rli->master_log_*, then
-    init_info checks for the existence of the relay log, this fails and 
+    init_info checks for the existence of the relay log, this fails and
     init_info leaves inited to 0.
     In that pathological case, master_log_pos* will be properly reinited at
     the next START SLAVE (as RESET SLAVE or CHANGE MASTER, the callers of
@@ -1645,7 +1645,6 @@ bool Relay_log_info::cached_charset_compare(char *charset) const
   DBUG_RETURN(0);
 }
 
-
 int Relay_log_info::stmt_done(my_off_t event_master_log_pos)
 {
   int error= 0;
@@ -1772,9 +1771,9 @@ void Relay_log_info::clear_tables_to_lock()
 #ifndef DBUG_OFF
   /**
     When replicating in RBR and MyISAM Merge tables are involved
-    open_and_lock_tables (called in do_apply_event) appends the 
-    base tables to the list of tables_to_lock. Then these are 
-    removed from the list in close_thread_tables (which is called 
+    open_and_lock_tables (called in do_apply_event) appends the
+    base tables to the list of tables_to_lock. Then these are
+    removed from the list in close_thread_tables (which is called
     before we reach this point).
 
     This assertion just confirms that we get no surprises at this
@@ -1783,7 +1782,7 @@ void Relay_log_info::clear_tables_to_lock()
   uint i=0;
   for (TABLE_LIST *ptr= tables_to_lock ; ptr ; ptr= ptr->next_global, i++) ;
   DBUG_ASSERT(i == tables_to_lock_count);
-#endif  
+#endif
 
   while (tables_to_lock)
   {
@@ -1795,8 +1794,8 @@ void Relay_log_info::clear_tables_to_lock()
     }
 
     /*
-      If blob fields were used during conversion of field values 
-      from the master table into the slave table, then we need to 
+      If blob fields were used during conversion of field values
+      from the master table into the slave table, then we need to
       free the memory used temporarily to store their values before
       copying into the slave's table.
     */
@@ -1872,7 +1871,7 @@ bool mysql_show_relaylog_events(THD* thd)
     my_error(ER_SLAVE_CONFIGURATION, MYF(0));
     DBUG_RETURN(true);
   }
-  
+
   DBUG_RETURN(show_binlog_events(thd, &active_mi->rli->relay_log));
 }
 
@@ -1915,11 +1914,11 @@ int Relay_log_info::rli_init_info()
       "signature" and then fast-forward to the last position read.
     */
     bool hot_log= FALSE;
-    /* 
+    /*
       my_b_seek does an implicit flush_io_cache, so we need to:
 
       1. check if this log is active (hot)
-      2. if it is we keep log_lock until the seek ends, otherwise 
+      2. if it is we keep log_lock until the seek ends, otherwise
          release it right away.
 
       If we did not take log_lock, SQL thread might race with IO
@@ -2087,7 +2086,7 @@ a file name for --relay-log-index option.", opt_relaylog_index_name);
    /*
     This checks if the repository was created before and thus there
     will be values to be read. Please, do not move this call after
-    the handler->init_info(). 
+    the handler->init_info().
   */
   if ((check_return= check_info()) == ERROR_CHECKING_REPOSITORY)
   {
@@ -2300,10 +2299,10 @@ int Relay_log_info::flush_info(const bool force)
   if (!inited)
     DBUG_RETURN(0);
 
-  /* 
+  /*
     We update the sync_period at this point because only here we
     now that we are handling a relay log info. This needs to be
-    update every time we call flush because the option maybe 
+    update every time we call flush because the option maybe
     dinamically set.
   */
   handler->set_sync_period(sync_relayloginfo_period);
@@ -2327,8 +2326,8 @@ err:
   DBUG_RETURN(1);
 }
 
-size_t Relay_log_info::get_number_info_rli_fields() 
-{ 
+size_t Relay_log_info::get_number_info_rli_fields()
+{
   return sizeof(info_rli_fields)/sizeof(info_rli_fields[0]);
 }
 
@@ -2425,7 +2424,7 @@ bool Relay_log_info::read_info(Rpl_info_handler *from)
     if (from->get_info(&temp_internal_id, (int) 1))
       DBUG_RETURN(TRUE);
   }
- 
+
   group_relay_log_pos=  temp_group_relay_log_pos;
   group_master_log_pos= temp_group_master_log_pos;
   sql_delay= (int32) temp_sql_delay;
@@ -2487,7 +2486,7 @@ bool Relay_log_info::write_info(Rpl_info_handler *to)
    once at its destruction time.
    todo: fix Slave_worker and Relay_log_info inheritance relation.
 
-   @param  a pointer to be installed into execution context 
+   @param  a pointer to be installed into execution context
            FormatDescriptor event
 */
 
@@ -2532,12 +2531,12 @@ struct st_feature_version
   */
   uchar version_split[3];
   /*
-    Action to perform when according to FormatDescriptor event Master 
+    Action to perform when according to FormatDescriptor event Master
     is found to be feature-aware while previously it has *not* been.
   */
   void (*upgrade) (THD*);
   /*
-    Action to perform when according to FormatDescriptor event Master 
+    Action to perform when according to FormatDescriptor event Master
     is found to be feature-*un*aware while previously it has been.
   */
   void (*downgrade) (THD*);
@@ -2574,15 +2573,15 @@ static st_feature_version s_features[]=
 };
 
 /**
-   The method lists rules of adaptation for the slave applier 
+   The method lists rules of adaptation for the slave applier
    to specific master versions.
    It's executed right before a new master FD is set for
    slave appliers execution context.
    Comparison of the old and new version yields the adaptive
    actions direction.
    Current execution FD's version, V_0, is compared with the new being set up
-   FD (the arg), let's call it V_1. 
-   In the case of downgrade features that are defined in [V_0, V_1-1] range 
+   FD (the arg), let's call it V_1.
+   In the case of downgrade features that are defined in [V_0, V_1-1] range
    (V_1 excluded) are "removed" by running the downgrade actions.
    In the upgrade case the featured defined in [V_0 + 1, V_1] range are
    "added" by running the upgrade actions.
@@ -2594,7 +2593,7 @@ static st_feature_version s_features[]=
 
    Also, at composing downgrade/upgrade actions keep in mind that
    at initialization Slave sets up FD of version 4.0 and then transits to
-   the current server version. At transition all upgrading actions in 
+   the current server version. At transition all upgrading actions in
    the range of [4.0..current] are run.
 
    @param fdle  a pointer to new Format Description event that is being set
@@ -2605,7 +2604,7 @@ void Relay_log_info::adapt_to_master_version(Format_description_log_event *fdle)
   THD *thd=info_thd;
   ulong master_version, current_version;
   int changed= !fdle || ! rli_description_event ? 0 :
-    (master_version= fdle->get_version_product()) - 
+    (master_version= fdle->get_version_product()) -
     (current_version= rli_description_event->get_version_product());
 
   /* When the last version is not changed nothing to adapt for */
@@ -2624,7 +2623,7 @@ void Relay_log_info::adapt_to_master_version(Format_description_log_event *fdle)
   {
     ulong ver_f= version_product(s_features[i].version_split);
 
-    if ((downgrade ? master_version : current_version) < ver_f && 
+    if ((downgrade ? master_version : current_version) < ver_f &&
         i_first == st_feature_version::_END_OF_LIST)
       i_first= i;
     if ((downgrade ? current_version : master_version) < ver_f)
@@ -2635,7 +2634,7 @@ void Relay_log_info::adapt_to_master_version(Format_description_log_event *fdle)
     }
   }
 
-  /* 
+  /*
      actions, executed in version non-descending st_feature_version order
   */
   for (i= i_first; i < i_last; i++)

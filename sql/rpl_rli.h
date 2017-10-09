@@ -171,7 +171,7 @@ public:
      &rli->cache_buf, depending on whether the log is hot or there was
      the need to open a cold relay_log.
 
-   cache_buf 
+   cache_buf
      IO_CACHE used when opening cold relay logs.
    */
   IO_CACHE cache_buf,*cur_log;
@@ -316,7 +316,7 @@ public:
   bool ignore_log_space_limit;
 
   /*
-    Used by the SQL thread to instructs the IO thread to rotate 
+    Used by the SQL thread to instructs the IO thread to rotate
     the logs when the SQL thread needs to purge to release some
     disk space.
    */
@@ -373,7 +373,7 @@ public:
 
   /*
      Condition and its parameters from START SLAVE UNTIL clause.
-     
+
      UNTIL condition is tested with is_until_satisfied() method that is
      called by exec_relay_log_event(). is_until_satisfied() caches the result
      of the comparison of log names because log names don't change very often;
@@ -402,12 +402,12 @@ public:
     after executing START SLAVE UNTIL SQL_*_GTIDS.
   */
   bool until_sql_gtids_first_event;
-  /* 
+  /*
      Cached result of comparison of until_log_name and current log name
-     -2 means unitialised, -1,0,1 are comarison results 
+     -2 means unitialised, -1,0,1 are comarison results
   */
-  enum 
-  { 
+  enum
+  {
     UNTIL_LOG_NAMES_CMP_UNKNOWN= -2, UNTIL_LOG_NAMES_CMP_LESS= -1,
     UNTIL_LOG_NAMES_CMP_EQUAL= 0, UNTIL_LOG_NAMES_CMP_GREATER= 1
   } until_log_names_cmp_result;
@@ -433,11 +433,11 @@ public:
   char ign_master_log_name_end[FN_REFLEN];
   ulonglong ign_master_log_pos_end;
 
-  /* 
+  /*
     Indentifies where the SQL Thread should create temporary files for the
     LOAD DATA INFILE. This is used for security reasons.
-   */ 
-  char slave_patternload_file[FN_REFLEN]; 
+   */
+  char slave_patternload_file[FN_REFLEN];
   size_t slave_patternload_file_size;
 
   /**
@@ -465,7 +465,7 @@ public:
     if (until_condition==UNTIL_MASTER_POS)
       until_log_names_cmp_result= UNTIL_LOG_NAMES_CMP_UNKNOWN;
   }
-  
+
   inline void inc_event_relay_log_pos()
   {
     event_relay_log_pos= future_event_relay_log_pos;
@@ -474,7 +474,7 @@ public:
   int inc_group_relay_log_pos(ulonglong log_pos,
                               bool need_data_lock);
 
-  int wait_for_pos(THD* thd, String* log_name, longlong log_pos, 
+  int wait_for_pos(THD* thd, String* log_name, longlong log_pos,
 		   longlong timeout);
   int wait_for_gtid_set(THD* thd, String* gtid, longlong timeout);
   void close_temporary_tables();
@@ -541,7 +541,7 @@ public:
   Deferred_log_events *deferred_events;
 
   /*
-    State of the container: true stands for IRU events gathering, 
+    State of the container: true stands for IRU events gathering,
     false does for execution, either deferred or direct.
   */
   bool deferred_events_collecting;
@@ -579,13 +579,13 @@ public:
   bool curr_group_isolated;     // current group requires execution in isolation
   bool mts_end_group_sets_max_dbs; // flag indicates if partitioning info is discovered
   volatile ulong mts_wq_underrun_w_id;  // Id of a Worker whose queue is getting empty
-  /* 
+  /*
      Ongoing excessive overrun counter to correspond to number of events that
      are being scheduled while a WQ is close to be filled up.
      `Close' is defined as (100 - mts_worker_underrun_level) %.
      The counter is incremented each time a WQ get filled over that level
      and decremented when the level drops below.
-     The counter therefore describes level of saturation that Workers 
+     The counter therefore describes level of saturation that Workers
      are experiencing and is used as a parameter to compute a nap time for
      Coordinator in order to avoid reaching WQ limits.
   */
@@ -614,14 +614,14 @@ public:
             V                            |
     MTS_NOT_IN_GROUP =>                  |
         {MTS_IN_GROUP => MTS_END_GROUP --+} while (!killed) => MTS_KILLED_GROUP
-      
+
     MTS_END_GROUP has `->' loop breaking link to MTS_NOT_IN_GROUP when
     Coordinator synchronizes with Workers by demanding them to
     complete their assignments.
   */
   enum
   {
-    /* 
+    /*
        no new events were scheduled after last synchronization,
        includes Single-Threaded-Slave case.
     */
@@ -640,15 +640,15 @@ public:
   volatile ulong mts_wq_overrun_cnt; // counter of all mts_wq_excess_cnt increments
   ulong wq_size_waits_cnt;    // number of times C slept due to WQ:s oversize
   /*
-    a counter for sleeps due to Coordinator 
+    a counter for sleeps due to Coordinator
     experienced waiting when Workers get hungry again
   */
   ulong mts_wq_no_underrun_cnt;
   ulong mts_wq_overfill_cnt;  // counter of C waited due to a WQ queue was full
-  /* 
+  /*
      A sorted array of the Workers' current assignement numbers to provide
      approximate view on Workers loading.
-     The first row of the least occupied Worker is queried at assigning 
+     The first row of the least occupied Worker is queried at assigning
      a new partition. Is updated at checkpoint commit to the main RLI.
   */
   DYNAMIC_ARRAY least_occupied_workers;
@@ -732,7 +732,7 @@ public:
   /**
      While a group is executed by a Worker the relay log can change.
      Coordinator notifies Workers about this event. Coordinator and Workers
-     maintain a bitmap of executed group that is reset with a new checkpoint. 
+     maintain a bitmap of executed group that is reset with a new checkpoint.
   */
   void reset_notified_checkpoint(ulong, time_t, ulonglong, bool);
 
@@ -756,7 +756,7 @@ public:
     if (deferred_events)
       delete deferred_events;
   };
-   
+
   /**
     Helper function to do after statement completion.
 
@@ -1110,6 +1110,7 @@ public:
 
 #if defined(HAVE_REPLICATION) && !defined(MYSQL_CLIENT)
   /* Related to dependency tracking */
+  Table_map_log_event *prev_table_map_log_event;
 
   // DAG of events
   DAG<Log_event_wrapper*> dag;
