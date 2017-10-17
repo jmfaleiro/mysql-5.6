@@ -1110,7 +1110,9 @@ public:
 
 #if defined(HAVE_REPLICATION) && !defined(MYSQL_CLIENT)
   /* Related to dependency tracking */
-  Table_map_log_event *prev_table_map_log_event;
+  THD tbl_get_thd;
+  Log_event_wrapper *event_list= NULL;
+  Table_map_log_event *prev_table_map_log_event= NULL;
 
   // DAG of events
   DAG<Log_event_wrapper*> dag;

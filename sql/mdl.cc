@@ -1235,7 +1235,7 @@ void MDL_ticket::destroy(MDL_ticket *ticket)
 
 /**
   Return the 'weight' of this ticket for the
-  victim selection algorithm. Requests with 
+  victim selection algorithm. Requests with
   lower weight are preferred to requests
   with higher weight when choosing a victim.
 */
@@ -2474,7 +2474,7 @@ err:
   @note There can be only one upgrader for a lock or we will have deadlock.
         This invariant is ensured by the fact that upgradeable locks SU, SNW
         and SNRW are not compatible with each other and themselves in case
-        of ALTER TABLE operation. 
+        of ALTER TABLE operation.
         In case of CREATE TABLE operation there is chance of deadlock as 'S'
         is compatible with 'S'. But the deadlock is recovered by backoff and
         retry mechanism.

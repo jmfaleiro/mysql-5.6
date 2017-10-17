@@ -91,7 +91,7 @@ private:
 #ifdef HAVE_PSI_INTERFACE
   static PSI_mutex_key m_lock_key;
   static PSI_mutex_info m_mutex_keys[];
-#endif 
+#endif
 
 private:
 
@@ -132,9 +132,9 @@ public:
 
   void free_all_unused_tables();
 
-#ifndef DBUG_OFF
+//#ifndef DBUG_OFF
   void print_tables();
-#endif
+//#endif
 };
 
 

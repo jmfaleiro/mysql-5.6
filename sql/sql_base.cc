@@ -2640,6 +2640,254 @@ tdc_wait_for_old_version_nsec(THD *thd, const char *db, const char *table_name,
   return res;
 }
 
+void return_table_to_cache(THD *thd, TABLE_LIST *table_list)
+{
+  Table_cache *tc;
+  TABLE *table;
+
+  DBUG_ENTER("return_table_to_cache");
+
+  if (table_list->table != NULL)
+  {
+    DBUG_ASSERT(thd->open_tables == table_list-> table);
+    DBUG_ASSERT(thd->open_tables->next == NULL);
+    DBUG_ASSERT(!table_list->table->s->has_old_version());
+
+    table= table_list->table;
+
+    tc= table_cache_manager.get_cache(thd);
+    tc->lock();
+
+    /* Deal with cache invalidation */
+    if (table->s->has_old_version() || table->needs_reopen() ||
+        table_def_shutdown_in_progress)
+    {
+      tc->remove_table(table);
+      mysql_mutex_lock(&LOCK_open);
+      intern_close_table(table);
+      mysql_mutex_unlock(&LOCK_open);
+    }
+    else
+    {
+      tc->release_table(thd, table);
+    }
+
+    tc->unlock();
+    thd->open_tables= NULL;
+  }
+
+  /* Release the meta data lock */
+  thd->mdl_context.release_statement_locks();
+  table_list->mdl_request.ticket= NULL;
+
+  DBUG_VOID_RETURN;
+}
+
+/*
+ * Check if we're able to get the TABLE* from the thread cache.
+ */
+static TABLE*
+get_table_from_thd_cache(THD *thd, my_hash_value_type hash_value,
+          const char *key, uint key_length, TABLE_SHARE **share)
+{
+  Table_cache *tc;
+  TABLE *table;
+
+  DBUG_ENTER("get_table_from_thd_cache");
+
+  *share= NULL;
+  tc= table_cache_manager.get_cache(thd);
+  tc->lock();
+  table= tc->get_table(thd, hash_value, key, key_length, share);
+
+  if (!table && *share)
+  {
+      /*
+       * JMF: Using the same logic in open_table(), which acquires LOCK_open
+       * before releasing the Table_cache lock
+       */
+      mysql_mutex_lock(&LOCK_open);
+      (*share)->ref_count++;
+  }
+
+  tc->unlock();
+
+  DBUG_RETURN(table);
+}
+
+/*
+ * JMF: This function basically copies functionality from open_table() to
+ * create a table from a share.
+ */
+static TABLE*
+init_table_from_share(THD *thd, TABLE_SHARE *share, TABLE_LIST *table_list)
+{
+  TABLE *table;
+  int error;
+  char *alias= table_list->alias;
+
+  DBUG_ENTER("init_table_from_share");
+
+  /* make a new table */
+  if (!(table= (TABLE*) my_malloc(sizeof(*table), MYF(MY_WME))))
+    goto err;
+
+  error= open_table_from_share(thd, share, alias,
+                               (uint) (HA_OPEN_KEYFILE |
+                                       HA_OPEN_RNDFILE |
+                                       HA_GET_INDEX |
+                                       HA_TRY_READ_ONLY),
+                               (READ_KEYINFO | COMPUTE_TYPES |
+                                EXTRA_RECORD),
+                               thd->open_options, table, FALSE);
+
+  if (error)
+  {
+    my_free(table);
+    goto err;
+  }
+  if (open_table_entry_fini(thd, share, table))
+  {
+    closefrm(table, 0);
+    my_free(table);
+    goto err;
+  }
+  {
+    /* Add new TABLE object to table cache for this connection. */
+    Table_cache *tc= table_cache_manager.get_cache(thd);
+
+    tc->lock();
+
+    if (tc->add_used_table(thd, table))
+    {
+      tc->unlock();
+      goto err;
+    }
+    tc->unlock();
+  }
+
+  table->mdl_ticket= table_list->mdl_request.ticket;
+
+  table->next= thd->open_tables;		/* Link into simple list */
+  thd->set_open_tables(table);
+  table->count_comment_bytes= thd->count_comment_bytes;    /* Assigning the
+                                   comment bytes count to the relevant table */
+
+  table->reginfo.lock_type=TL_READ;		/* Assume read */
+
+  table->set_created();
+  /*
+    Check that there is no reference to a condition from an earlier query
+    (cf. Bug#58553).
+  */
+  DBUG_ASSERT(table->file->pushed_cond == NULL);
+  table_list->updatable= 1; // It is not derived table nor non-updatable VIEW
+  table_list->table= table;
+
+
+  DBUG_RETURN(table);
+
+err:
+  DBUG_RETURN(NULL);
+}
+
+bool get_table_from_cache(THD *thd, TABLE_LIST *table_list)
+{
+  const char *key;
+  uint key_length;
+  uint flags=0;
+  MDL_ticket *mdl_ticket;
+  my_hash_value_type hash_value;
+  TABLE_SHARE *share;
+  Open_table_context ot_ctx(thd, flags);
+  TABLE *table;
+  int error;
+
+  DBUG_ENTER("get_table_from_cache");
+
+  share= NULL;
+  table= NULL;
+  key_length= get_table_def_key(table_list, &key);
+  hash_value= my_calc_hash(&table_def_cache, (uchar*) key, key_length);
+
+  /* Get a SHARE lock on the meta-data. */
+  if (open_table_get_mdl_lock(thd, &ot_ctx, &table_list->mdl_request,
+                                flags, &mdl_ticket) ||
+      mdl_ticket == NULL)
+  {
+    /* JMF: Need to acquire this lock at the very least. */
+    goto done;
+  }
+
+  /*
+   * JMF: Four possibilities here.
+   * 1) We found the table, just return it.
+   * 2) We found the share, need to create a TABLE* and insert into the thread
+   *    cache. Only then return the newly created TABLE*.
+   * 3) We found neither table nor share. Try to find the share elsewhere. If
+   *    we succeed, follow the same path as 2.
+   * 4) Fail.
+   */
+  if ((table= get_table_from_thd_cache(thd, hash_value, key, key_length, &share)))
+  {
+    /* Possibility 1 */
+
+    /* XXX Need to actually invalidate the cache at this point. */
+    DBUG_ASSERT(!table->s->has_old_version());
+    goto done;
+  }
+  else if (share) {
+    /* Possibility 2 */
+    goto found_share;
+  }
+
+  /* Couldn't find anything in the thread cache, try global data-structures */
+  mysql_mutex_lock(&LOCK_open);
+  share= get_table_share_with_discover(thd, table_list, key, key_length,
+                                      OPEN_VIEW, &error, hash_value);
+
+  if (share)
+  {
+    /* Possibility 3 */
+    goto found_share;
+  }
+  else
+  {
+    /* Possbility 4. Fail. */
+    mysql_mutex_unlock(&LOCK_open);
+    table= NULL;
+    goto done;
+  }
+
+found_share:
+  /* If we're here then LOCK_open is acquired by this thread. */
+
+  /* Share shouldn't be stale because we've already acquired metadata locks */
+  DBUG_ASSERT(!share->has_old_version());
+
+  mysql_mutex_unlock(&LOCK_open);
+
+  if ((table= init_table_from_share(thd, share, table_list)))
+  {
+    /* Successfully initialized the table. */
+    goto done;
+  }
+  else
+  {
+    /* Otherwise, acquire LOCK_open to release the share ref. */
+    mysql_mutex_lock(&LOCK_open);
+  }
+
+  release_table_share(share);
+  mysql_mutex_unlock(&LOCK_open);
+
+done:
+  mysql_mutex_assert_not_owner(&LOCK_open);
+  table_list->table= table;
+  thd->clear_error();
+  thd->clear_warning();
+  DBUG_RETURN(table_list->table == NULL);
+}
 
 /**
   Open a base table.

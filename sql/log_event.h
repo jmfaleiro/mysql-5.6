@@ -4019,7 +4019,7 @@ public:
 
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
   virtual int pack_info(Protocol *protocol);
-  int setup_table_rli(Relay_log_info *rli);
+  void* setup_table_rli(RPL_TABLE_LIST **table_list);
 #endif
 
 #ifdef MYSQL_CLIENT
@@ -4457,9 +4457,12 @@ private:
 private:
 
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
+public:
   void get_keys(Relay_log_info *rli);
-  int get_table_ref(Relay_log_info *rli);
-  void close_table_ref(Relay_log_info *rli);
+private:
+  bool get_table_ref(Relay_log_info *rli, void **memory,
+      RPL_TABLE_LIST **table_list);
+  void close_table_ref(THD *thd, RPL_TABLE_LIST *table_list);
   virtual void do_add_to_dag(Relay_log_info *rli, Log_event_wrapper *ev);
   virtual int do_apply_event(Relay_log_info const *rli);
   virtual int do_update_pos(Relay_log_info *rli);

@@ -3242,6 +3242,19 @@ void Log_event::add_to_dag(Relay_log_info *rli)
   rli->dag_wrlock();
 
   Log_event_wrapper *ev= new Log_event_wrapper(this, rli->current_begin_event);
+
+  /*
+   * JMF: Debugging.
+  ev->link_prev= NULL;
+  ev->link_next= rli->event_list;
+  if (rli->event_list != NULL)
+  {
+    rli->event_list->link_prev= ev;
+  }
+
+  rli->event_list= ev;
+  */
+
   do_add_to_dag(rli, ev);
 
   DBUG_ASSERT(!rli->dag.is_empty() || ev->is_begin_event);
@@ -11907,17 +11920,30 @@ static void restore_empty_query_table_list(LEX *lex)
 /* JMF */
 void Rows_log_event::get_keys(Relay_log_info *rli)
 {
+  RPL_TABLE_LIST *table_list;
+  void *memory;
+
   DBUG_ENTER("Rows_log_event::get_keys");
-  MY_BITMAP *cols= NULL;
-  TABLE *table= NULL;
+  DBUG_ASSERT(thd->open_tables == NULL);
+ // MY_BITMAP *cols= NULL;
+//  TABLE *table= NULL;
 
   if (m_type == WRITE_ROWS_EVENT) {
-    cols= &m_cols;
+  //  cols= &m_cols;
+    get_table_ref(rli, &memory, &table_list);
+    DBUG_ASSERT(memory != NULL);
+    close_table_ref(thd, table_list);
+    my_free(memory);
+    /*
     if (!get_table_ref(rli))
     {
       table= rli->tables_to_lock->table;
       m_table= rli->tables_to_lock->table;
       m_key_info = m_table->key_info;
+    }
+    else
+    {
+      goto quit;
     }
 
     if (table->s->keys > 0) {
@@ -11933,49 +11959,47 @@ void Rows_log_event::get_keys(Relay_log_info *rli)
     }
 
     close_table_ref(rli);
-
     m_key_info= NULL;
     m_table= NULL;
     m_curr_row_end= NULL;
     m_curr_row= m_rows_buf;
- }
+    */
+  }
 
+//quit:
   DBUG_VOID_RETURN;
 }
 
 
-int Rows_log_event::get_table_ref(Relay_log_info *rli)
+bool Rows_log_event::get_table_ref(Relay_log_info *rli, void **memory,
+                             RPL_TABLE_LIST **table_list)
 {
+  bool success;
+
   DBUG_ENTER("Rows_log_event::get_table_ref");
 
-  assert(!rli->tables_to_lock);
-  assert(!rli->tables_to_lock_count);
+  Table_map_log_event *prev= dynamic_cast<Table_map_log_event*>(rli->prev_event->get_raw_event());
+  DBUG_ASSERT(prev != NULL);
 
-  Table_map_log_event *prev = dynamic_cast<Table_map_log_event*>(rli->prev_event->get_raw_event());
+  *memory= prev->setup_table_rli(table_list);
+  assert(*memory != NULL);
+  (*table_list)->mdl_request.duration= MDL_STATEMENT;
+  (*table_list)->mdl_request.type= MDL_SHARED;
 
-  prev->setup_table_rli(rli);
-  assert(rli->tables_to_lock);
-  assert(rli->tables_to_lock_count);
-
-  if (open_and_lock_tables(thd, rli->tables_to_lock, FALSE, 0))
-  {
-    assert(false);
-  }
-
-  DBUG_RETURN(0);
+  success = get_table_from_cache(thd, dynamic_cast<TABLE_LIST*>(*table_list));
+  DBUG_RETURN(success);
 }
 
 /* JMF */
-void Rows_log_event::close_table_ref(Relay_log_info *rli)
+void Rows_log_event::close_table_ref(THD *thd, RPL_TABLE_LIST *table_list)
 {
   DBUG_ENTER("Rows_log_event::close_table_ref");
-  assert(rli->tables_to_lock);
-  assert(rli->tables_to_lock_count);
+  DBUG_ASSERT(thd->mdl_context.has_locks() == TRUE);
 
-  rli->cleanup_context(thd, false);
+  return_table_to_cache(thd, dynamic_cast<TABLE_LIST*>(table_list));
 
-  assert(!rli->tables_to_lock);
-  assert(!rli->tables_to_lock_count);
+  DBUG_ASSERT(thd->mdl_context.has_locks() == FALSE);
+  DBUG_ASSERT(thd->open_tables == NULL);
   DBUG_VOID_RETURN;
 }
 
@@ -13465,28 +13489,20 @@ check_table_map(Relay_log_info const *rli, RPL_TABLE_LIST *table_list)
 }
 
 /* JMF */
-int Table_map_log_event::setup_table_rli(Relay_log_info *rli)
+void* Table_map_log_event::setup_table_rli(RPL_TABLE_LIST **table_list)
 {
 
   DBUG_ENTER("Table_map_log_event::setup_table_rli");
 
-  assert(!rli->tables_to_lock);
-  assert(!rli->tables_to_lock_count);
-  RPL_TABLE_LIST *table_list;
-  char *db_mem, *tname_mem, *ptr;
-  size_t dummy_len;
+  char *db_mem, *tname_mem;
   void *memory;
-  DBUG_ASSERT(rli->info_thd == thd);
-
-  /* Step the query id to mark what columns that are actually used. */
-  thd->set_query_id(next_query_id());
 
   if (!(memory= my_multi_malloc(MYF(MY_WME),
-                                &table_list, (uint) sizeof(RPL_TABLE_LIST),
+                                table_list, (uint) sizeof(RPL_TABLE_LIST),
                                 &db_mem, (uint) NAME_LEN + 1,
                                 &tname_mem, (uint) NAME_LEN + 1,
                                 NullS)))
-    DBUG_RETURN(HA_ERR_OUT_OF_MEM);
+    DBUG_RETURN(NULL);
 
   strmov(db_mem, m_dbnam);
   strmov(tname_mem, m_tblnam);
@@ -13497,99 +13513,10 @@ int Table_map_log_event::setup_table_rli(Relay_log_info *rli)
     my_casedn_str(system_charset_info, tname_mem);
   }
 
-  /* rewrite rules changed the database */
-  if (((ptr= (char*) rpl_filter->get_rewrite_db(db_mem, &dummy_len)) != db_mem))
-    strmov(db_mem, ptr);
-
-  table_list->init_one_table(db_mem, strlen(db_mem),
+  (*table_list)->init_one_table(db_mem, strlen(db_mem),
                              tname_mem, strlen(tname_mem),
                              tname_mem, TL_WRITE);
-
-  table_list->table_id=
-    DBUG_EVALUATE_IF("inject_tblmap_same_id_maps_diff_table", 0, m_table_id.id());
-  table_list->updating= 1;
-  table_list->required_type= FRMTYPE_TABLE;
-  table_list->master_had_triggers = ((m_flags & TM_BIT_HAS_TRIGGERS_F) ? 1 : 0);
-  DBUG_PRINT("debug", ("table: %s is mapped to %llu%s", table_list->table_name,
-                       table_list->table_id.id(),
-                       (table_list->master_had_triggers ?
-                       " (master had triggers)" : "")));
-
-  enum_tbl_map_status tblmap_status= check_table_map(rli, table_list);
-  if (tblmap_status == OK_TO_PROCESS)
-  {
-    DBUG_ASSERT(thd->lex->query_tables != table_list);
-
-    /*
-      Use placement new to construct the table_def instance in the
-      memory allocated for it inside table_list.
-
-      The memory allocated by the table_def structure (i.e., not the
-      memory allocated *for* the table_def structure) is released
-      inside Relay_log_info::clear_tables_to_lock() by calling the
-      table_def destructor explicitly.
-    */
-    new (&table_list->m_tabledef)
-      table_def(m_coltype, m_colcnt,
-                m_field_metadata, m_field_metadata_size,
-                m_null_bits, m_flags, m_column_names, m_sign_bits);
-    table_list->m_tabledef_valid= TRUE;
-    table_list->m_conv_table= NULL;
-    table_list->open_type= OT_BASE_ONLY;
-
-    /*
-      We record in the slave's information that the table should be
-      locked by linking the table into the list of tables to lock.
-    */
-    table_list->next_global= table_list->next_local= rli->tables_to_lock;
-    const_cast<Relay_log_info*>(rli)->tables_to_lock= table_list;
-    const_cast<Relay_log_info*>(rli)->tables_to_lock_count++;
-    /* 'memory' is freed in clear_tables_to_lock */
-  }
-  else  // FILTERED_OUT, SAME_ID_MAPPING_*
-  {
-    /*
-      If mapped already but with different properties, we raise an
-      error.
-      If mapped already but with same properties we skip the event.
-      If filtered out we skip the event.
-
-      In all three cases, we need to free the memory previously
-      allocated.
-     */
-    assert(false);
-    if (tblmap_status == SAME_ID_MAPPING_DIFFERENT_TABLE)
-    {
-      /*
-        Something bad has happened. We need to stop the slave as strange things
-        could happen if we proceed: slave crash, wrong table being updated, ...
-        As a consequence we push an error in this case.
-       */
-
-      char buf[256];
-
-      my_snprintf(buf, sizeof(buf),
-                  "Found table map event mapping table id %llu which "
-                  "was already mapped but with different settings.",
-                  table_list->table_id.id());
-
-      if (thd->slave_thread)
-        rli->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR,
-                    ER(ER_SLAVE_FATAL_ERROR), buf);
-      else
-        /*
-          For the cases in which a 'BINLOG' statement is set to
-          execute in a user session
-         */
-        my_printf_error(ER_SLAVE_FATAL_ERROR, ER(ER_SLAVE_FATAL_ERROR),
-                        MYF(0), buf);
-    }
-
-    my_free(memory);
-  }
-
-  DBUG_RETURN(tblmap_status == SAME_ID_MAPPING_DIFFERENT_TABLE);
-
+  DBUG_RETURN(memory);
 }
 
 
