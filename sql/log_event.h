@@ -32,6 +32,7 @@
 #include "rpl_constants.h"
 #include "table_id.h"
 #include <set>
+#include <deque>
 
 #ifdef MYSQL_CLIENT
 #include "sql_const.h"
@@ -4034,7 +4035,6 @@ public:
 
 private:
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
-  virtual void do_add_to_dag(Relay_log_info *rli, Log_event_wrapper *ev);
   virtual int do_apply_event(Relay_log_info const *rli);
   virtual int do_update_pos(Relay_log_info *rli);
   virtual enum_skip_reason do_shall_skip(Relay_log_info *rli);
@@ -4458,11 +4458,12 @@ private:
 
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
 public:
-  void get_keys(Relay_log_info *rli);
+  bool get_keys(Relay_log_info *rli, std::deque<uchar*> &keys);
 private:
   bool get_table_ref(Relay_log_info *rli, void **memory,
       RPL_TABLE_LIST **table_list);
   void close_table_ref(THD *thd, RPL_TABLE_LIST *table_list);
+  uint check_pk(TABLE *tbl, Relay_log_info *rli, MY_BITMAP *cols);
   virtual void do_add_to_dag(Relay_log_info *rli, Log_event_wrapper *ev);
   virtual int do_apply_event(Relay_log_info const *rli);
   virtual int do_update_pos(Relay_log_info *rli);

@@ -1130,6 +1130,9 @@ public:
   /* Set of all DBs accessed by the current group */
   std::unordered_set<std::string> dbs_accessed_by_group;
 
+  /* For each table encountered, tracks if we've seen primary key */
+  std::unordered_map<ulonglong, uint> seen_pk;
+
   // Mutex-condition pair to notify that a group is ready to be executed
   mysql_cond_t dag_group_ready_cond;
   mysql_mutex_t dag_group_ready_mutex;

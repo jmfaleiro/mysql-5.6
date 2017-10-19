@@ -386,8 +386,8 @@ unpack_row(Relay_log_info const *rli,
   if (bitmap_is_clear_all(cols))
   {
     /**
-       There was no data sent from the master, so there is 
-       nothing to unpack.    
+       There was no data sent from the master, so there is
+       nothing to unpack.
      */
     *current_row_end= pack_ptr;
     *master_reclength= 0;
@@ -476,19 +476,19 @@ unpack_row(Relay_log_info const *rli,
         {
           DBUG_PRINT("debug", ("Was NULL; null mask: 0x%x; null bits: 0x%x",
                                null_mask, null_bits));
-          /** 
-            Calling reset just in case one is unpacking on top a 
-            record with data. 
+          /**
+            Calling reset just in case one is unpacking on top a
+            record with data.
 
-            This could probably go into set_null() but doing so, 
-            (i) triggers assertion in other parts of the code at 
+            This could probably go into set_null() but doing so,
+            (i) triggers assertion in other parts of the code at
             the moment; (ii) it would make us reset the field,
-            always when setting null, which right now doesn't seem 
+            always when setting null, which right now doesn't seem
             needed anywhere else except here.
 
-            TODO: maybe in the future we should consider moving 
+            TODO: maybe in the future we should consider moving
                   the reset to make it part of set_null. But then
-                  the assertions triggered need to be 
+                  the assertions triggered need to be
                   addressed/revisited.
            */
           f->reset();
@@ -613,7 +613,11 @@ unpack_row(Relay_log_info const *rli,
     }
   }
 
-  insert_row_fields(row_query, table);
+  if (row_query)
+  {
+    insert_row_fields(row_query, table);
+  }
+
   /*
     We should now have read all the null bytes, otherwise something is
     really wrong.
@@ -630,7 +634,7 @@ unpack_row(Relay_log_info const *rli,
     else
       *master_reclength = table->s->reclength;
   }
-  
+
   DBUG_RETURN(error);
 }
 
@@ -638,15 +642,15 @@ unpack_row(Relay_log_info const *rli,
   Fills @c table->record[0] with default values.
 
   First @c restore_record() is called to restore the default values for
-  record concerning the given table. Then, if @c check is true, 
-  a check is performed to see if fields are have default value or can 
+  record concerning the given table. Then, if @c check is true,
+  a check is performed to see if fields are have default value or can
   be NULL. Otherwise error is reported.
- 
-  @param table  Table whose record[0] buffer is prepared. 
+
+  @param table  Table whose record[0] buffer is prepared.
   @param check  Specifies if lack of default error needs checking.
 
   @returns 0 on success or a handler level error code
- */ 
+ */
 int prepare_record(TABLE *const table, const MY_BITMAP *cols, const bool check)
 {
   DBUG_ENTER("prepare_record");
@@ -659,10 +663,10 @@ int prepare_record(TABLE *const table, const MY_BITMAP *cols, const bool check)
   /*
     For fields the extra fields on the slave, we check if they have a default.
     The check follows the same rules as the INSERT query without specifying an
-    explicit value for a field not having the explicit default 
+    explicit value for a field not having the explicit default
     (@c check_that_all_fields_are_given_values()).
   */
-  
+
   DBUG_PRINT_BITSET("debug", "cols: %s", cols);
   /**
     Save a reference to the original write set bitmaps.

@@ -2834,6 +2834,8 @@ bool get_table_from_cache(THD *thd, TABLE_LIST *table_list)
 
     /* XXX Need to actually invalidate the cache at this point. */
     DBUG_ASSERT(!table->s->has_old_version());
+    table->next= thd->open_tables;
+    thd->set_open_tables(table);
     goto done;
   }
   else if (share) {

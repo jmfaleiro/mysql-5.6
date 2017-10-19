@@ -11918,58 +11918,97 @@ static void restore_empty_query_table_list(LEX *lex)
  */
 
 /* JMF */
-void Rows_log_event::get_keys(Relay_log_info *rli)
+bool Rows_log_event::get_keys(Relay_log_info *rli, std::deque<uchar*> &keys)
 {
   RPL_TABLE_LIST *table_list;
   void *memory;
+  MY_BITMAP *cols= NULL;
+  TABLE *table= NULL;
+  uint primary_key;
+  uchar *curr_row, *curr_key;
+  KEY *keyinfo;
+  const uchar *curr_row_end;
+  int res;
+  uint i;
+  bool got_keys;
 
   DBUG_ENTER("Rows_log_event::get_keys");
   DBUG_ASSERT(thd->open_tables == NULL);
- // MY_BITMAP *cols= NULL;
-//  TABLE *table= NULL;
 
   if (m_type == WRITE_ROWS_EVENT) {
-  //  cols= &m_cols;
-    get_table_ref(rli, &memory, &table_list);
-    DBUG_ASSERT(memory != NULL);
-    close_table_ref(thd, table_list);
-    my_free(memory);
-    /*
-    if (!get_table_ref(rli))
+    cols= &m_cols;
+    if (!get_table_ref(rli, &memory, &table_list))
     {
-      table= rli->tables_to_lock->table;
-      m_table= rli->tables_to_lock->table;
-      m_key_info = m_table->key_info;
+      table= table_list->table;
+      keyinfo= table->key_info;
     }
     else
     {
-      goto quit;
+      got_keys= false;
+      goto skip_keys;
     }
 
-    if (table->s->keys > 0) {
-      assert(m_curr_row == m_rows_buf);
-      do {
-        unpack_current_row(rli, cols);
-        m_distinct_key_spare_buf= (uchar*) thd->alloc(table->key_info[m_key_index].key_length);
-        if (add_key_to_distinct_keyset())
-            assert(false);
-
-        m_curr_row= m_curr_row_end;
-      } while (m_curr_row != m_rows_end);
+    primary_key= check_pk(table, rli, cols);
+    if (primary_key == MAX_KEY)
+    {
+      got_keys= false;
+      goto skip_keys;
     }
 
-    close_table_ref(rli);
+    got_keys= true;
+    curr_row= m_rows_buf;
+    rli->tables_to_lock= table_list;
+    for (i= 0, curr_row= m_rows_buf; i++, curr_row != m_rows_end;
+          curr_row= const_cast<uchar*>(curr_row_end))
+    {
+      res= ::unpack_row(rli, table, m_width, curr_row, cols,
+              &curr_row_end, &m_master_reclength, m_rows_end);
+      DBUG_ASSERT(!res);
+      curr_key= (uchar*)my_malloc(keyinfo->key_length, MYF(MY_WME));
+      DBUG_ASSERT(curr_key);
+      key_copy(curr_key, table->record[0], keyinfo, 0);
+      keys.push_back(curr_key);
+   }
+    rli->tables_to_lock= NULL;
+
+skip_keys:
+    DBUG_ASSERT(memory != NULL);
+    DBUG_ASSERT(table_list->m_tabledef_valid);
+    close_table_ref(thd, table_list);
+    table_list->m_tabledef.table_def::~table_def();
+    table_list->m_tabledef_valid= FALSE;
+
+    my_free(memory);
+
     m_key_info= NULL;
     m_table= NULL;
     m_curr_row_end= NULL;
     m_curr_row= m_rows_buf;
-    */
   }
 
-//quit:
-  DBUG_VOID_RETURN;
+  DBUG_RETURN(got_keys);
 }
 
+uint
+Rows_log_event::check_pk(TABLE *table, Relay_log_info *rli, MY_BITMAP *cols)
+{
+  ulonglong table_id;
+  uint pk;
+
+  DBUG_ENTER("Rows_log_event::check_pk");
+
+  table_id= get_table_id();
+  pk= search_key_in_table(table, cols, PRI_KEY_FLAG);
+  if (rli->seen_pk.find(table_id) == rli->seen_pk.end())
+  {
+    rli->seen_pk[table_id]= pk;
+  }
+  else
+  {
+    DBUG_ASSERT(rli->seen_pk[table_id] == pk);
+  }
+  DBUG_RETURN(pk);
+}
 
 bool Rows_log_event::get_table_ref(Relay_log_info *rli, void **memory,
                              RPL_TABLE_LIST **table_list)
@@ -11998,6 +12037,7 @@ void Rows_log_event::close_table_ref(THD *thd, RPL_TABLE_LIST *table_list)
 
   return_table_to_cache(thd, dynamic_cast<TABLE_LIST*>(table_list));
 
+
   DBUG_ASSERT(thd->mdl_context.has_locks() == FALSE);
   DBUG_ASSERT(thd->open_tables == NULL);
   DBUG_VOID_RETURN;
@@ -12006,8 +12046,8 @@ void Rows_log_event::close_table_ref(THD *thd, RPL_TABLE_LIST *table_list)
 void Rows_log_event::do_add_to_dag(Relay_log_info *rli, Log_event_wrapper *ev)
 {
   DBUG_ENTER("Rows_log_event::do_add_to_dag");
-
-  get_keys(rli);
+  std::deque<uchar*> keys;
+  get_keys(rli, keys);
 
   // case: we have recorded the last trx's penultimate event for this table,
   // and it exists in the DAG
@@ -13513,111 +13553,19 @@ void* Table_map_log_event::setup_table_rli(RPL_TABLE_LIST **table_list)
     my_casedn_str(system_charset_info, tname_mem);
   }
 
+
   (*table_list)->init_one_table(db_mem, strlen(db_mem),
                              tname_mem, strlen(tname_mem),
                              tname_mem, TL_WRITE);
+
+  new (&((*table_list)->m_tabledef)) table_def(m_coltype, m_colcnt,
+              m_field_metadata, m_field_metadata_size,
+              m_null_bits, m_flags, m_column_names, m_sign_bits);
+  (*table_list)->m_tabledef_valid= TRUE;
+  (*table_list)->m_conv_table= NULL;
+  (*table_list)->open_type= OT_BASE_ONLY;
+
   DBUG_RETURN(memory);
-}
-
-
-
-/*
- * JMF
- * This doesn't actually add anything to the dag apart from the default stuff
- * done in Log_event::do_add_to_dag.
- *
- * We just want to setup rli->tables_to_lock so that we can open a TABLE*
- * reference in the corresponding Rows_log_event to obtain row-level
- * dependencies among log records.
- */
-void Table_map_log_event::do_add_to_dag(Relay_log_info *rli, Log_event_wrapper *ev)
-{
- // assert(!rli->tables_to_lock);
-//  assert(!rli->tables_to_lock_count);
- // assert(ev->get_begin_event());
-//  assert(rli->prev_event != NULL);
-
-  /* Add the event to the dag as before */
-//  rli->prev_table_map_log_event = this;
-  rli->dag.add_dependency(rli->prev_event, ev);
-
-  /* Setup the RLI to get the TABLE* for the upcoming Rows_log_event */
-//   RPL_TABLE_LIST *table_list;
-//   char *db_mem, *tname_mem, *ptr;
-//   size_t dummy_len;
-//   void *memory;
-//
-//   DBUG_ASSERT(rli->info_thd == thd);
-//
-//   if (!(memory= my_multi_malloc(MYF(MY_WME),
-//                                 &table_list, (uint) sizeof(RPL_TABLE_LIST),
-//                                 &db_mem, (uint) NAME_LEN + 1,
-//                                 &tname_mem, (uint) NAME_LEN + 1,
-//                                 NullS)))
-//
-//   strmov(db_mem, m_dbnam);
-//   strmov(tname_mem, m_tblnam);
-//
-//   if (lower_case_table_names == 1)
-//   {
-//     my_casedn_str(system_charset_info, db_mem);
-//     my_casedn_str(system_charset_info, tname_mem);
-//   }
-//
-//   /* rewrite rules changed the database */
-//   if (((ptr= (char*) rpl_filter->get_rewrite_db(db_mem, &dummy_len)) != db_mem))
-//     strmov(db_mem, ptr);
-//
-//   table_list->init_one_table(db_mem, strlen(db_mem),
-//                              tname_mem, strlen(tname_mem),
-//                              tname_mem, TL_WRITE);
-//
-//   table_list->table_id=
-//     DBUG_EVALUATE_IF("inject_tblmap_same_id_maps_diff_table", 0, m_table_id.id());
-//   table_list->updating= 1;
-//   table_list->required_type= FRMTYPE_TABLE;
-//   table_list->master_had_triggers = ((m_flags & TM_BIT_HAS_TRIGGERS_F) ? 1 : 0);
-//   DBUG_PRINT("debug", ("table: %s is mapped to %llu%s", table_list->table_name,
-//                        table_list->table_id.id(),
-//                        (table_list->master_had_triggers ?
-//                        " (master had triggers)" : "")));
-//
-//   enum_tbl_map_status tblmap_status= check_table_map(rli, table_list);
-//   if (tblmap_status == OK_TO_PROCESS)
-//   {
-//     DBUG_ASSERT(thd->lex->query_tables != table_list);
-//
-//     /*
-//       Use placement new to construct the table_def instance in the
-//       memory allocated for it inside table_list.
-//
-//       The memory allocated by the table_def structure (i.e., not the
-//       memory allocated *for* the table_def structure) is released
-//       inside Relay_log_info::clear_tables_to_lock() by calling the
-//       table_def destructor explicitly.
-//     */
-//     new (&table_list->m_tabledef)
-//       table_def(m_coltype, m_colcnt,
-//                 m_field_metadata, m_field_metadata_size,
-//                 m_null_bits, m_flags, m_column_names, m_sign_bits);
-//     table_list->m_tabledef_valid= TRUE;
-//     table_list->m_conv_table= NULL;
-//     table_list->open_type= OT_BASE_ONLY;
-//
-//     /*
-//       We record in the slave's information that the table should be
-//       locked by linking the table into the list of tables to lock.
-//     */
-//     table_list->next_global= table_list->next_local= rli->tables_to_lock;
-//     const_cast<Relay_log_info*>(rli)->tables_to_lock= table_list;
-//     const_cast<Relay_log_info*>(rli)->tables_to_lock_count++;
-//   }
-//   else
-//   {
-//     /* JMF: Guard against this case properly */
-//     assert(false);
-//   }
-//   DBUG_VOID_RETURN;
 }
 
 int Table_map_log_event::do_apply_event(Relay_log_info const *rli)
