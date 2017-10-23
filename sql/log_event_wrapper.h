@@ -20,6 +20,10 @@ class Log_event_wrapper
   bool ready_to_execute;
 
 public:
+  /* JMF: debugging */
+  Log_event_wrapper *link_prev;
+  Log_event_wrapper *link_next;
+
   std::atomic<uint> is_assigned; // has this event been assigned to a worker?
   bool is_appended_to_queue; // has this event been assigned to a worker queue?
   bool is_begin_event;

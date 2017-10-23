@@ -132,9 +132,9 @@ public:
 
   void free_all_unused_tables();
 
-#ifndef DBUG_OFF
+//#ifndef DBUG_OFF
   void print_tables();
-#endif
+//#endif
 };
 
 

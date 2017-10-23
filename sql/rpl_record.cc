@@ -613,7 +613,11 @@ unpack_row(Relay_log_info const *rli,
     }
   }
 
+  if (row_query)
+  {
   insert_row_fields(row_query, table);
+  }
+
   /*
     We should now have read all the null bytes, otherwise something is
     really wrong.

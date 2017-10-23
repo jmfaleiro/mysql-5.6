@@ -161,7 +161,7 @@ void Table_cache::free_all_unused_tables()
 }
 
 
-#ifndef DBUG_OFF
+//#ifndef DBUG_OFF
 /**
   Print debug information for the contents of the table cache.
 */
@@ -217,7 +217,7 @@ void Table_cache::print_tables()
     printf("Unused_links (%d) doesn't match table_def_cache: %d\n", count,
            unused);
 }
-#endif
+//#endif
 
 
 /**

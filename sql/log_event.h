@@ -32,6 +32,7 @@
 #include "rpl_constants.h"
 #include "table_id.h"
 #include <set>
+#include <deque>
 
 #ifdef MYSQL_CLIENT
 #include "sql_const.h"
@@ -53,6 +54,7 @@
 
 /* Forward declarations */
 class String;
+class DAG_key;
 typedef ulonglong sql_mode_t;
 typedef struct st_db_worker_hash_entry db_worker_hash_entry;
 #if defined(HAVE_REPLICATION) && !defined(MYSQL_CLIENT)
@@ -3906,6 +3908,7 @@ char *str_to_hex(char *to, const char *from, uint len);
 */
 class Table_map_log_event : public Log_event
 {
+  friend class Rows_log_event;
 public:
   /* Constants */
   enum
@@ -4018,6 +4021,7 @@ public:
 
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
   virtual int pack_info(Protocol *protocol);
+  void* setup_table_rli(RPL_TABLE_LIST **table_list);
 #endif
 
 #ifdef MYSQL_CLIENT
@@ -4454,6 +4458,17 @@ private:
 private:
 
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
+public:
+  bool get_keys(Relay_log_info *rli, std::deque<DAG_key*> &keys);
+protected:
+  uint check_pk(TABLE *tbl, Relay_log_info *rli, MY_BITMAP *cols);
+  virtual bool do_get_keys(Relay_log_info *rli,
+      RPL_TABLE_LIST *table_list, std::deque<DAG_key*> &keys) = 0;
+
+private:
+  bool get_table_ref(Relay_log_info *rli, void **memory,
+      RPL_TABLE_LIST **table_list);
+  void close_table_ref(THD *thd, RPL_TABLE_LIST *table_list);
   virtual void do_add_to_dag(Relay_log_info *rli, Log_event_wrapper *ev);
   virtual int do_apply_event(Relay_log_info const *rli);
   virtual int do_update_pos(Relay_log_info *rli);
@@ -4690,6 +4705,9 @@ private:
   virtual int do_after_row_operations(const Relay_log_info*, int);
   virtual int do_exec_row(const Relay_log_info *const);
   uint8 get_trg_event_map();
+protected:
+  bool do_get_keys(Relay_log_info*, RPL_TABLE_LIST*,
+              std::deque<DAG_key*>&);
 #endif
 };
 
@@ -4760,6 +4778,8 @@ protected:
 #endif
 
 #if defined(MYSQL_SERVER) && defined(HAVE_REPLICATION)
+  bool do_get_keys(Relay_log_info*, RPL_TABLE_LIST*,
+              std::deque<DAG_key*>&);
   virtual int do_before_row_operations(const Relay_log_info*);
   virtual int do_after_row_operations(const Relay_log_info*, int);
   virtual int do_exec_row(const Relay_log_info *const);
@@ -4828,6 +4848,8 @@ protected:
   virtual int do_after_row_operations(const Relay_log_info*, int);
   virtual int do_exec_row(const Relay_log_info *const);
   uint8 get_trg_event_map();
+  bool do_get_keys(Relay_log_info*, RPL_TABLE_LIST*,
+              std::deque<DAG_key*>&);
 #endif
 };
 

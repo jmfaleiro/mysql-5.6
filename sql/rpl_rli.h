@@ -38,6 +38,39 @@ class Master_info;
 class Commit_order_manager;
 extern uint sql_slave_skip_counter;
 
+struct DAG_key {
+  uint key_length;
+  uint table_id;
+  uchar key_buffer[0];
+};
+
+class DAG_key_equals
+{
+  public:
+    bool operator() (const DAG_key *k1, const DAG_key *k2) const
+    {
+      return ((k1->key_length == k2->key_length) &&
+              (k1->table_id == k2->table_id) &&
+              !memcmp(&k1->key_buffer, &k2->key_buffer, k1->key_length));
+    }
+};
+
+class DAG_key_hash
+{
+  public:
+    size_t operator() (const DAG_key *k) const
+    {
+      size_t hash = k->key_length;
+      hash += (71*hash + k->table_id);
+      for(size_t i=0; i<k->key_length; i++)
+      {
+        hash += (71*hash + k->key_buffer[i]) % 5;
+      }
+      return hash;
+    }
+};
+
+
 enum class Enum_slave_caughtup {
   NONE,
   YES,
@@ -1110,6 +1143,9 @@ public:
 
 #if defined(HAVE_REPLICATION) && !defined(MYSQL_CLIENT)
   /* Related to dependency tracking */
+  THD tbl_get_thd;
+  Log_event_wrapper *event_list= NULL;
+  Table_map_log_event *prev_table_map_log_event= NULL;
 
   // DAG of events
   DAG<Log_event_wrapper*> dag;
@@ -1119,6 +1155,10 @@ public:
      last trx that updated that table */
   std::unordered_map<ulonglong, Log_event_wrapper*>
                                              dag_table_last_penultimate_event;
+
+  std::unordered_map<DAG_key*, Log_event_wrapper*, DAG_key_hash, DAG_key_equals>
+                                            dag_key_last_penultimate_event;
+
   /* Set of all tables accessed by the current group */
   std::unordered_set<ulonglong> tables_accessed_by_group;
 
@@ -1126,6 +1166,9 @@ public:
   std::unordered_map<std::string, Log_event_wrapper*> dag_db_last_start_event;
   /* Set of all DBs accessed by the current group */
   std::unordered_set<std::string> dbs_accessed_by_group;
+
+  /* For each table encountered, tracks if we've seen primary key */
+  std::unordered_map<ulonglong, uint> seen_pk;
 
   // Mutex-condition pair to notify that a group is ready to be executed
   mysql_cond_t dag_group_ready_cond;
