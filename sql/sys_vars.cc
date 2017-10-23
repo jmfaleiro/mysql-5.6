@@ -5175,6 +5175,15 @@ static Sys_var_double Sys_mts_imbalance_threshold(
        GLOBAL_VAR(opt_mts_imbalance_threshold),
        CMD_LINE(OPT_ARG), VALID_RANGE(0, 100), DEFAULT(90));
 
+static const char *replication_type_names[]= { "TABLE", "STATEMENT", NullS };
+
+static Sys_var_enum Sys_replication_type(
+       "replication_type", "Type of replication",
+       GLOBAL_VAR(replication_type_options), CMD_LINE(OPT_ARG),
+       replication_type_names, DEFAULT(REPLICATION_TYPE_STATEMENT),
+       NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+       ON_UPDATE(0));
+
 static bool
 check_mts_dependency_replication(sys_var *self, THD *thd, set_var *var)
 {

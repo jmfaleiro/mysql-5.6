@@ -1057,6 +1057,8 @@ The following options may be given as the first argument:
  replicate-wild-ignore-table=foo%.bar% will not do updates
  to tables in databases that start with foo and whose
  table names start with bar.
+ --replication-type[=name]
+ Type of replication
  --report-host=name  Hostname or IP of the slave to be reported to the master
  during slave registration. Will appear in the output of
  SHOW SLAVE HOSTS. Leave unset if you do not want the
@@ -2095,6 +2097,7 @@ relay-log-purge TRUE
 relay-log-recovery FALSE
 relay-log-space-limit 0
 replicate-same-server-id FALSE
+replication-type STATEMENT
 report-host (No default value)
 report-password (No default value)
 report-port 0

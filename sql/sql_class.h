@@ -126,6 +126,10 @@ enum enum_slave_exec_mode { SLAVE_EXEC_MODE_STRICT,
                             SLAVE_EXEC_MODE_SEMI_STRICT,
                             SLAVE_EXEC_MODE_LAST_BIT };
 
+enum enum_replication_type {
+  REPLICATION_TYPE_TABLE,
+  REPLICATION_TYPE_STATEMENT };
+
 enum enum_slave_use_idempotent_for_recovery {
   SLAVE_USE_IDEMPOTENT_FOR_RECOVERY_NO,
   SLAVE_USE_IDEMPOTENT_FOR_RECOVERY_YES};
