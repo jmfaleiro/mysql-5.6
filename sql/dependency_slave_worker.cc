@@ -4,6 +4,7 @@
 #include "log_event_wrapper.h"
 #include "rpl_slave_commit_order_manager.h"
 #include <time.h>
+#include "rpl_slave_snapshot_manager.h"
 
 
 bool append_item_to_jobs(slave_job_item *job_item,
@@ -32,12 +33,19 @@ Dependency_slave_worker::get_begin_event(Commit_order_manager *co_mngr)
     while (!ret->whole_group_scheduled) {
       my_sleep(1);
     }
+
+    Slave_job_group *ptr_g = c_rli->gaq->get_job_group(ret->raw_event()->mts_group_idx);
+    set_group_seqno(ptr_g->total_seqno);
+
+    auto *mngr = get_snapshot_manager();
+    if (mngr != nullptr)
+	mngr->wait_for_snapshot(info_thd, get_group_seqno());
   }
 
   // case: place ourselves in the commit order queue
   if (ret && co_mngr != NULL)
   {
-    DBUG_ASSERT(opt_mts_dependency_order_commits);
+    DBUG_ASSERT(opt_mts_dependency_order_commits == DEP_ORDER_COMMITS_STRICT);
     set_current_db(ret->get_db());
     co_mngr->register_trx(this);
   }
