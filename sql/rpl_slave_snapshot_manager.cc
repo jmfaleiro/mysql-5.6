@@ -33,7 +33,15 @@ bool Snapshot_manager::update_snapshot(bool force)
   m_snapshot= m_rli->info_thd->get_explicit_snapshot();
 
   DBUG_ASSERT(force || m_rli->mts_groups_assigned >= m_next_seqno);
-  m_next_seqno= m_rli->mts_groups_assigned;
+
+  // Advance next snapshot sequence number
+  if (m_next_seqno == m_rli->mts_groups_assigned) {
+    // Edge case when no txns are scheduled
+    m_next_seqno = m_rli->mts_groups_assigned + 1;
+  } else {
+    // Regular case
+    m_next_seqno= m_rli->mts_groups_assigned;
+  }
 
   mysql_cond_broadcast(&m_cond);
 

@@ -1872,7 +1872,7 @@ void wait_for_dep_workers_to_finish(Relay_log_info *rli,
 
   auto mngr= rli->get_snapshot_manager();
   if (mngr)
-    mngr->move_next_seqno(rli->mts_groups_assigned + 1);
+    mngr->move_next_seqno(rli->mts_groups_assigned);
 
   const ulonglong num= partial_trx ? 1 : 0;
   while (rli->num_in_flight_trx.load() > num && !rli->info_thd->killed)

@@ -12,7 +12,7 @@ class Snapshot_manager
 
   mysql_mutex_t m_mutex;
   mysql_cond_t m_cond;
-  ulonglong m_next_seqno= 1;
+  ulonglong m_next_seqno= 0;
 
 public:
   Snapshot_manager(Relay_log_info *m_rli) : m_rli(m_rli)
