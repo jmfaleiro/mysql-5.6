@@ -35,10 +35,7 @@ bool Snapshot_manager::update_snapshot(bool force)
   m_snapshot= m_rli->info_thd->get_explicit_snapshot();
 
   now= std::chrono::system_clock::now();
-
-  m_last_snapshot_ms= now;
-
-  sql_print_information("jhelt,snap_ms,%llu,%lu", m_next_seqno, m_last_snapshot_ms.time_since_epoch().count());
+  sql_print_information("jhelt,snap_ms,%llu,%lu", m_next_seqno, now.time_since_epoch().count());
 
   DBUG_ASSERT(force || m_rli->mts_groups_assigned >= m_next_seqno);
 
