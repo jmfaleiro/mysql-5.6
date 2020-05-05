@@ -44,6 +44,13 @@ public:
     return t;
   }
 
+  void reset_behind_ms()
+  {
+    mysql_mutex_lock(&m_mutex);
+    m_behind_ms = std::chrono::microseconds {0};
+    mysql_mutex_unlock(&m_mutex);
+  }
+
   ulong get_waiting()
   {
     ulong w = -1;

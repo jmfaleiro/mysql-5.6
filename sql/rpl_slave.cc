@@ -4167,6 +4167,11 @@ apply_event_and_update_pos(Log_event** ptr_ev, THD* thd, Relay_log_info* rli)
       if (opt_mts_dependency_replication)
       {
         DBUG_ASSERT(ev->worker == NULL);
+        if (auto snapshot_mngr= rli->get_snapshot_manager() && rli->dep_queue.unsafe_size() == 0)
+        {
+          snapshot_mngr->reset_behind_ms();
+        }
+
         ev->schedule_dep(rli);
       }
       else if (ev->worker)
