@@ -6056,9 +6056,8 @@ bool mts_checkpoint_routine(Relay_log_info *rli, std::chrono::microseconds perio
 {
   ulong cnt;
   bool error= FALSE;
-  struct timespec curr_clock;
-  std::chrono::nanoseconds since_ms {0};
-  ulong nworkers= rli->slave_parallel_workers;
+  // struct timespec curr_clock;
+  // ulong nworkers= rli->slave_parallel_workers;
   ulong waiting= 0;
 
   DBUG_ENTER("checkpoint_routine");
@@ -6084,8 +6083,8 @@ bool mts_checkpoint_routine(Relay_log_info *rli, std::chrono::microseconds perio
   {
 
     waiting= snapshot_mngr->get_waiting();
-    since_ms= std::chrono::system_clock::now() - snapshot_mngr->get_last_snapshot_time();
-    since_ms= since_ms + snapshot_mngr->get_behind_ms();
+    // since_ms= std::chrono::system_clock::now() - snapshot_mngr->get_last_snapshot_time();
+    // since_ms= since_ms + snapshot_mngr->get_behind_ms();
   }
 
   /*
@@ -6094,9 +6093,9 @@ bool mts_checkpoint_routine(Relay_log_info *rli, std::chrono::microseconds perio
     in the SQL Thread's execution path and the elapsed time is calculated
     here to check if it is time to execute it.
   */
-  set_timespec_nsec(curr_clock, 0);
-  std::chrono::nanoseconds diff {diff_timespec(curr_clock, rli->last_clock)};
-  if (!force && diff < period && (since_ms < period || waiting < nworkers))
+  // set_timespec_nsec(curr_clock, 0);
+  // if (!force && diff < period && (since_ms < period || waiting < nworkers))
+  if (!force || waiting > 0)
   {
     /*
       We do not need to execute the checkpoint now because
