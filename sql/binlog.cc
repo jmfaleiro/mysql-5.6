@@ -7675,15 +7675,6 @@ int
 MYSQL_BIN_LOG::finish_commit(THD *thd, bool async)
 {
 
-#ifdef HAVE_REPLICATION
-  if (has_snapshot_manager(thd))
-  {
-    Slave_worker *worker= dynamic_cast<Slave_worker *>(thd->rli_slave);
-    Snapshot_manager *mngr= worker->get_snapshot_manager();
-    mngr->wait_for_snapshot(worker->info_thd, worker->get_group_seqno());
-  }
-#endif
-
   /*
     In some unlikely situations, it can happen that binary
     log is closed before the thread flushes it's cache.

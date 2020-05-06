@@ -28,6 +28,16 @@ Dependency_slave_worker::get_begin_event(Commit_order_manager *co_mngr)
 
   if (ret) {
     status_var_increment(info_thd->status_var.com_stat[SQLCOM_DEQUEUED]);
+
+#ifdef HAVE_REPLICATION
+    if (auto mngr = get_snapshot_manager())
+    {
+      Slave_job_group *ptr_g = c_rli->gaq->get_job_group(ret->raw_event()->mts_group_idx);
+
+      mngr->wait_for_snapshot(info_thd, ptr_g->total_seqno);
+    }
+#endif
+
   }
 
   // case: place ourselves in the commit order queue
